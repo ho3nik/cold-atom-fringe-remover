@@ -1,7 +1,7 @@
 streamlit
-igor2
+numpy
+matplotlib
 scikit-image
 scikit-learn
-matplotlib
-numpy
 scipy
+igor==0.5

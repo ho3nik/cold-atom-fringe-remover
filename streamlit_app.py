@@ -17,12 +17,12 @@ def enhance(img):
     img = np.nan_to_num(img, nan=0.0)
     p2, p98 = np.percentile(img, (2, 98))
     img = np.clip(img, p2, p98)
-    img = (img - img.min()) / (img.ptp() + 1e-12)
+    img = (img - img.min()) / (np.ptp(img) + 1e-12)
     img = gaussian_filter(img, sigma=1)
     return exposure.equalize_adapthist(img, clip_limit=0.03)
 
 def clean_fringes(ipwa, ipwoa):
-    norm = (ipwoa - ipwoa.min()) / (ipwoa.ptp() + 1e-12)
+    norm = (ipwoa - ipwoa.min()) / (np.ptp(ipwoa) + 1e-12)
     corrected = ipwa.astype(float)
     for i in range(ipwa.shape[1]):
         col = norm[:, i].reshape(-1, 1)
@@ -32,7 +32,7 @@ def clean_fringes(ipwa, ipwoa):
         transformed = pca.fit_transform(col)
         reconstructed = pca.inverse_transform(transformed)
         corrected[:, i] -= reconstructed.flatten()
-    return (corrected - corrected.min()) / (corrected.ptp() + 1e-12)
+    return (corrected - corrected.min()) / (np.ptp(corrected) + 1e-12)
 
 def _try_split_2d_into_pair(w):
     h, wcol = w.shape

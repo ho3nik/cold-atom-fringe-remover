@@ -1,7 +1,8 @@
 streamlit
-numpy
+numpy>=2.0
 matplotlib
 scikit-image
 scikit-learn
 scipy
 igor2
+

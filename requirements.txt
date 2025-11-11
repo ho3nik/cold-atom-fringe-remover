@@ -1,0 +1,7 @@
+streamlit
+igor2
+scikit-image
+scikit-learn
+matplotlib
+numpy
+scipy

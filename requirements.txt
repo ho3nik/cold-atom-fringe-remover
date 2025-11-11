@@ -4,4 +4,4 @@ matplotlib
 scikit-image
 scikit-learn
 scipy
-igor==0.5
+igor2

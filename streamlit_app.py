@@ -9,16 +9,10 @@ from skimage import exposure
 from scipy.ndimage import gaussian_filter
 from sklearn.decomposition import PCA
 
-# -----------------------------
-# Streamlit App Configuration
-# -----------------------------
 st.set_page_config(page_title="Cold Atom Fringe Remover", layout="wide")
 st.markdown("<h1 style='text-align: center;'>🧊 Cold Atom Fringe Remover</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; font-size: 22px;'>NOW WORKS ON PF_01Apr2024*.ibw — GUARANTEED</p>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; font-size: 18px; color: gray;'>Developed by H. RJ Nikzat</p>", unsafe_allow_html=True)
 
-# -----------------------------
-# Image Processing Functions
-# -----------------------------
 def enhance(img):
     img = np.nan_to_num(img, nan=0.0)
     p2, p98 = np.percentile(img, (2, 98))
@@ -40,27 +34,88 @@ def clean_fringes(ipwa, ipwoa):
         corrected[:, i] -= reconstructed.flatten()
     return (corrected - corrected.min()) / (corrected.ptp() + 1e-12)
 
+def _try_split_2d_into_pair(w):
+    h, wcol = w.shape
+    if wcol % 2 == 0:
+        left = w[:, : wcol // 2]
+        right = w[:, wcol // 2 :]
+        return left.T, right.T
+    if h % 2 == 0:
+        top = w[: h // 2, :]
+        bottom = w[h // 2 :, :]
+        return top.T, bottom.T
+    return None
+
+def _extract_wdata(data):
+    if isinstance(data, dict):
+        wave = data.get('wave') or data.get('w')
+        if isinstance(wave, dict) and 'wData' in wave:
+            return wave['wData']
+        if isinstance(wave, np.ndarray):
+            return wave
+        if 'wData' in data:
+            return data['wData']
+    if isinstance(data, np.ndarray):
+        return data
+    return None
+
 @st.cache_data
 def process(bytes_data, name):
     try:
         data = load_ibw(io.BytesIO(bytes_data))
-        w = data['wave']['wData']
+        w = _extract_wdata(data)
+        if w is None:
+            st.error(f"{name}: Couldn't find numeric wave data in file structure.")
+            return None, None
 
-        # AUTO-FIX for all .IBW formats
+        w = np.asarray(w)
+        w = np.squeeze(w)
+
         if w.ndim == 3:
-            if w.shape[2] == 3:
+            if w.shape[2] in (2,3):
                 ipwa = w[:, :, 0].T
                 ipwoa = w[:, :, 1].T
-            elif w.shape[0] == 3:
+            elif w.shape[0] in (2,3):
                 w = np.transpose(w, (1, 2, 0))
                 ipwa = w[:, :, 0].T
                 ipwoa = w[:, :, 1].T
+            elif w.shape[0] >= 2:
+                ipwa = w[0, :, :].T
+                ipwoa = w[1, :, :].T
             else:
-                st.error(f"{name}: Unexpected shape {w.shape}")
+                st.error(f"{name}: Unexpected 3D shape {w.shape}")
                 return None, None
+        elif w.ndim == 2:
+            maybe = _try_split_2d_into_pair(w)
+            if maybe is not None:
+                ipwa, ipwoa = maybe
+            else:
+                h, wc = w.shape
+                if wc > h and wc % 2 == 1 and wc - 1 > 0:
+                    left = w[:, : (wc - 1) // 2]
+                    right = w[:, (wc - 1) // 2 + 1 :]
+                    if left.shape == right.shape:
+                        ipwa = left.T
+                        ipwoa = right.T
+                    else:
+                        st.error(f"{name}: 2D image but cannot split into a pair (shape {w.shape}).")
+                        return None, None
+                else:
+                    st.error(f"{name}: Not 3D data (found 2D shape {w.shape}).")
+                    return None, None
         else:
-            st.error(f"{name}: Not 3D data")
+            st.error(f"{name}: Unsupported data dimensionality: {w.ndim} (shape {w.shape})")
             return None, None
+
+        if ipwa.size == 0 or ipwoa.size == 0:
+            st.error(f"{name}: Extracted empty image(s).")
+            return None, None
+        if ipwa.shape != ipwoa.shape:
+            if ipwa.T.shape == ipwoa.shape:
+                ipwa = ipwa.T
+            else:
+                st.error(f"{name}: Paired images have different shapes: {ipwa.shape} vs {ipwoa.shape}")
+                return None, None
 
         before = enhance(ipwa)
         after = clean_fringes(ipwa, ipwoa)
@@ -81,14 +136,10 @@ def process(bytes_data, name):
         plt.close(fig)
         buf.seek(0)
         return buf.getvalue(), after
+
     except Exception as e:
         st.error(f"{name}: {str(e)}")
         return None, None
-
-# -----------------------------
-# Streamlit UI
-# -----------------------------
-st.success("🔥 FIXED: Works on PF_01Apr2024_0588.ibw & 0550.ibw — tested just now")
 
 uploaded = st.file_uploader("Drop your .ibw files here", type="ibw", accept_multiple_files=True)
 

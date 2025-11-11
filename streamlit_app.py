@@ -22,17 +22,32 @@ def enhance(img):
     return exposure.equalize_adapthist(img, clip_limit=0.03)
 
 def clean_fringes(ipwa, ipwoa):
+    """
+    Removes fringes using PCA. Skips PCA if data is too small.
+    """
     norm = (ipwoa - ipwoa.min()) / (np.ptp(ipwoa) + 1e-12)
     corrected = ipwa.astype(float)
+
     for i in range(ipwa.shape[1]):
         col = norm[:, i].reshape(-1, 1)
+
+        # Only run PCA if there are at least 2 samples
         if col.shape[0] < 2:
+            # Not enough data for PCA; skip this column
             continue
-        pca = PCA(n_components=min(2, col.shape[0]))
+
+        # Determine number of components (can't exceed min(n_samples, n_features))
+        n_components = min(2, col.shape[0], col.shape[1])
+        if n_components < 1:
+            continue
+
+        pca = PCA(n_components=n_components)
         transformed = pca.fit_transform(col)
         reconstructed = pca.inverse_transform(transformed)
         corrected[:, i] -= reconstructed.flatten()
+
     return (corrected - corrected.min()) / (np.ptp(corrected) + 1e-12)
+
 
 def _try_split_2d_into_pair(w):
     h, wcol = w.shape
